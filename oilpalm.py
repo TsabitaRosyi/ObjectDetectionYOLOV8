@@ -153,5 +153,3 @@ if image:
             Image.fromarray(img_out).save(output_path)
             st.success(f"Hasil disimpan sebagai {output_path}")
 
-st.markdown("---")
-st.markdown("🧪 *Dikembangkan oleh Tim Riset Kelapa Sawit - PT Saraswanti Anugerah Makmur*")
