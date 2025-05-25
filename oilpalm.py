@@ -153,8 +153,17 @@ if image:
             with cols[i]:
                 st.metric(label=label, value=count)
 
-        if st.button("💾 Simpan Hasil Deteksi"):
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            output_path = f"hasil_deteksi_{timestamp}.png"
-            Image.fromarray(img_out).save(output_path)
-            st.success(f"Hasil disimpan sebagai {output_path}")
+        if st.button("💾 Unduh Hasil Deteksi"):
+    # Simpan ke objek memori
+    img_pil = Image.fromarray(img_out)
+    buf = BytesIO()
+    img_pil.save(buf, format="PNG")
+    byte_im = buf.getvalue()
+
+    st.download_button(
+        label="⬇️ Klik untuk Mengunduh Gambar",
+        data=byte_im,
+        file_name=f"hasil_deteksi_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png",
+        mime="image/png"
+    )
+
