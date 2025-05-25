@@ -13,7 +13,7 @@ from datetime import datetime
 st.set_page_config(page_title="Deteksi Buah Sawit", layout="wide")
 
 # Gambar header
-st.image("Buah-Kelapa-Sawit.jpg", width=150, caption="Deteksi Buah Sawit - by Team", use_column_width=False)
+st.image("Buah-Kelapa-Sawit.jpg", caption="Deteksi Buah Sawit - by Team", use_container_width=True)
 
 # Sidebar pengaturan
 with st.sidebar:
