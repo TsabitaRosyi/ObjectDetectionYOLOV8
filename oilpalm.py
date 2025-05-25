@@ -12,7 +12,7 @@ from datetime import datetime
 # Konfigurasi halaman
 st.set_page_config(page_title="Deteksi Buah Sawit", layout="wide")
 
-# Foto heading (pastikan file foto_heading.jpg tersedia di folder ini)
+# Gambar header
 st.image("Buah-Kelapa-Sawit.jpg", width=150, caption="Deteksi Buah Sawit - by Team", use_column_width=False)
 
 # Sidebar pengaturan
@@ -20,12 +20,12 @@ with st.sidebar:
     st.title("⚙️ Pengaturan")
     input_method = st.radio("Metode Input Gambar", ["📁 Upload", "📷 Kamera"])
 
-# Load model (cache agar tidak dimuat ulang)
+# Load model YOLO
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")  # Ganti path model jika berbeda
+    return YOLO("best.pt")  # Ganti path jika model ada di lokasi berbeda
 
-# Warna bounding box sesuai label
+# Warna untuk setiap label
 label_to_color = {
     "Masak": Color.RED,
     "Mengkal": Color.YELLOW,
@@ -33,13 +33,13 @@ label_to_color = {
 }
 label_annotator = LabelAnnotator()
 
-# Fungsi prediksi gambar
+# Prediksi dengan YOLO
 def predict_image(model, image):
     image = np.array(image.convert("RGB"))
     results = model(image)
     return results
 
-# Fungsi menggambar hasil deteksi
+# Gambar hasil prediksi
 def draw_results(image, results):
     img = np.array(image.convert("RGB"))
     class_counts = Counter()
@@ -70,23 +70,23 @@ def draw_results(image, results):
 
     return img, class_counts
 
-# Inisialisasi session state untuk kamera
+# Inisialisasi kamera
 if "camera_image" not in st.session_state:
     st.session_state["camera_image"] = ""
 
-# Judul aplikasi
+# Judul
 st.title("🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit")
 
 image = None
 
-# Upload Gambar
+# Upload
 if input_method == "📁 Upload":
     uploaded_file = st.file_uploader("Unggah gambar", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         image = Image.open(uploaded_file)
         st.image(image, caption="🖼 Gambar yang Diunggah", use_container_width=True)
 
-# Kamera Langsung
+# Kamera
 elif input_method == "📷 Kamera":
     st.markdown("### Kamera Belakang (Environment)")
 
@@ -139,7 +139,7 @@ elif input_method == "📷 Kamera":
         except Exception as e:
             st.error(f"Gagal memproses gambar: {e}")
 
-# Proses Deteksi
+# Deteksi dan tampilkan hasil
 if image:
     with st.spinner("🔍 Memproses gambar..."):
         model = load_model()
@@ -153,17 +153,16 @@ if image:
             with cols[i]:
                 st.metric(label=label, value=count)
 
+        # Tombol unduh hasil
         if st.button("💾 Unduh Hasil Deteksi"):
-    # Simpan ke objek memori
-    img_pil = Image.fromarray(img_out)
-    buf = BytesIO()
-    img_pil.save(buf, format="PNG")
-    byte_im = buf.getvalue()
+            img_pil = Image.fromarray(img_out)
+            buf = BytesIO()
+            img_pil.save(buf, format="PNG")
+            byte_im = buf.getvalue()
 
-    st.download_button(
-        label="⬇️ Klik untuk Mengunduh Gambar",
-        data=byte_im,
-        file_name=f"hasil_deteksi_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png",
-        mime="image/png"
-    )
-
+            st.download_button(
+                label="⬇️ Klik untuk Mengunduh Gambar",
+                data=byte_im,
+                file_name=f"hasil_deteksi_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png",
+                mime="image/png"
+            )
