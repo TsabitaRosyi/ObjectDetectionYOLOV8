@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import cv2
 import numpy as np
@@ -13,15 +12,18 @@ from datetime import datetime
 # Konfigurasi halaman
 st.set_page_config(page_title="Deteksi Buah Sawit", layout="wide")
 
-# Sidebar
+# Foto heading (pastikan file foto_heading.jpg tersedia di folder ini)
+st.image("Buah-Kelapa-Sawit.jpg", width=150, caption="Deteksi Buah Sawit - by Team", use_column_width=False)
+
+# Sidebar pengaturan
 with st.sidebar:
     st.title("⚙️ Pengaturan")
     input_method = st.radio("Metode Input Gambar", ["📁 Upload", "📷 Kamera"])
 
-# Load model
+# Load model (cache agar tidak dimuat ulang)
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")
+    return YOLO("best.pt")  # Ganti path model jika berbeda
 
 # Warna bounding box sesuai label
 label_to_color = {
@@ -31,13 +33,13 @@ label_to_color = {
 }
 label_annotator = LabelAnnotator()
 
-# Fungsi prediksi
+# Fungsi prediksi gambar
 def predict_image(model, image):
     image = np.array(image.convert("RGB"))
     results = model(image)
     return results
 
-# Gambar hasil deteksi
+# Fungsi menggambar hasil deteksi
 def draw_results(image, results):
     img = np.array(image.convert("RGB"))
     class_counts = Counter()
@@ -68,39 +70,43 @@ def draw_results(image, results):
 
     return img, class_counts
 
-# Inisialisasi
+# Inisialisasi session state untuk kamera
 if "camera_image" not in st.session_state:
     st.session_state["camera_image"] = ""
 
+# Judul aplikasi
 st.title("🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit")
 
 image = None
 
+# Upload Gambar
 if input_method == "📁 Upload":
     uploaded_file = st.file_uploader("Unggah gambar", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         image = Image.open(uploaded_file)
-        st.image(image, caption="Gambar yang Diunggah", use_container_width=True)
+        st.image(image, caption="🖼 Gambar yang Diunggah", use_container_width=True)
 
+# Kamera Langsung
 elif input_method == "📷 Kamera":
     st.markdown("### Kamera Belakang (Environment)")
+
     camera_html = """
     <div style="text-align:center;">
-        <video id=\"video\" autoplay playsinline style=\"width:100%; border:1px solid gray;\"></video>
+        <video id="video" autoplay playsinline style="width:100%; border:1px solid gray;"></video>
         <br/>
-        <button onclick=\"takePhoto()\" style=\"margin-top:10px; padding:10px 20px;\">📸 Ambil Gambar</button>
-        <canvas id=\"canvas\" style=\"display:none;\"></canvas>
+        <button onclick="takePhoto()" style="margin-top:10px; padding:10px 20px;">📸 Ambil Gambar</button>
+        <canvas id="canvas" style="display:none;"></canvas>
     </div>
     <script>
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: \"environment\" } },
+                    video: { facingMode: { ideal: "environment" } },
                     audio: false
                 });
                 document.getElementById('video').srcObject = stream;
             } catch (err) {
-                alert(\"Gagal mengakses kamera: \" + err.message);
+                alert("Gagal mengakses kamera: " + err.message);
             }
         }
         function takePhoto() {
@@ -133,7 +139,7 @@ elif input_method == "📷 Kamera":
         except Exception as e:
             st.error(f"Gagal memproses gambar: {e}")
 
-# Proses deteksi
+# Proses Deteksi
 if image:
     with st.spinner("🔍 Memproses gambar..."):
         model = load_model()
@@ -152,4 +158,3 @@ if image:
             output_path = f"hasil_deteksi_{timestamp}.png"
             Image.fromarray(img_out).save(output_path)
             st.success(f"Hasil disimpan sebagai {output_path}")
-
