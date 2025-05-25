@@ -1,31 +1,29 @@
+# app.py
 import streamlit as st
+import cv2
 import numpy as np
 from PIL import Image
+from collections import Counter
 import base64
 from io import BytesIO
-from collections import Counter
 from ultralytics import YOLO
 from supervision import BoxAnnotator, LabelAnnotator, Color, Detections
+from datetime import datetime
 
-# ------------------------#
 # Konfigurasi halaman
-# ------------------------#
 st.set_page_config(page_title="Deteksi Buah Sawit", layout="wide")
-st.title("🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit")
-st.markdown("Gunakan model YOLOv8 untuk mendeteksi dan mengklasifikasikan buah sawit berdasarkan tingkat kematangannya.")
 
-# ------------------------#
+# Sidebar
+with st.sidebar:
+    st.title("⚙️ Pengaturan")
+    input_method = st.radio("Metode Input Gambar", ["📁 Upload", "📷 Kamera"])
+
 # Load model
-# ------------------------#
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")  # Pastikan best.pt sudah ada di direktori yang sama
+    return YOLO("best.pt")
 
-model = load_model()
-
-# ------------------------#
-# Warna label dan anotator
-# ------------------------#
+# Warna bounding box sesuai label
 label_to_color = {
     "Masak": Color.RED,
     "Mengkal": Color.YELLOW,
@@ -33,21 +31,21 @@ label_to_color = {
 }
 label_annotator = LabelAnnotator()
 
-# ------------------------#
-# Fungsi prediksi & anotasi
-# ------------------------#
-def predict_image(image: Image.Image):
-    img_array = np.array(image.convert("RGB"))
-    results = model(img_array)
+# Fungsi prediksi
+def predict_image(model, image):
+    image = np.array(image.convert("RGB"))
+    results = model(image)
     return results
 
-def draw_results(image: Image.Image, results):
+# Gambar hasil deteksi
+def draw_results(image, results):
     img = np.array(image.convert("RGB"))
     class_counts = Counter()
 
     for result in results:
         boxes = result.boxes
         names = result.names
+
         xyxy = boxes.xyxy.cpu().numpy()
         class_ids = boxes.cls.cpu().numpy().astype(int)
         confidences = boxes.conf.cpu().numpy()
@@ -58,94 +56,102 @@ def draw_results(image: Image.Image, results):
             color = label_to_color.get(class_name, Color.WHITE)
             class_counts[class_name] += 1
 
+            box_annotator = BoxAnnotator(color=color)
             detection = Detections(
                 xyxy=np.array([box]),
                 confidence=np.array([conf]),
                 class_id=np.array([class_id])
             )
 
-            box_annotator = BoxAnnotator(color=color)
             img = box_annotator.annotate(scene=img, detections=detection)
             img = label_annotator.annotate(scene=img, detections=detection, labels=[label])
 
     return img, class_counts
 
-# ------------------------#
-# Input Gambar
-# ------------------------#
-col1, col2 = st.columns(2)
-with col1:
-    input_method = st.radio("Pilih metode input:", ["📁 Upload Gambar", "📷 Kamera"], index=0)
+# Inisialisasi
+if "camera_image" not in st.session_state:
+    st.session_state["camera_image"] = ""
+
+st.title("🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit")
 
 image = None
 
-if input_method == "📁 Upload Gambar":
+if input_method == "📁 Upload":
     uploaded_file = st.file_uploader("Unggah gambar", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         image = Image.open(uploaded_file)
-        st.image(image, caption="📥 Gambar diunggah", use_column_width=True)
+        st.image(image, caption="Gambar yang Diunggah", use_container_width=True)
 
 elif input_method == "📷 Kamera":
-    st.markdown("### Kamera Environment (Belakang)")
-    st.components.v1.html(
-        """
-        <div style="text-align:center;">
-            <video id="video" autoplay playsinline style="width:100%; border:1px solid gray;"></video>
-            <br/>
-            <button onclick="takePhoto()" style="margin-top:10px; padding:10px 20px;">📸 Ambil Gambar</button>
-            <canvas id="canvas" style="display:none;"></canvas>
-        </div>
-
-        <script>
+    st.markdown("### Kamera Belakang (Environment)")
+    camera_html = """
+    <div style="text-align:center;">
+        <video id=\"video\" autoplay playsinline style=\"width:100%; border:1px solid gray;\"></video>
+        <br/>
+        <button onclick=\"takePhoto()\" style=\"margin-top:10px; padding:10px 20px;\">📸 Ambil Gambar</button>
+        <canvas id=\"canvas\" style=\"display:none;\"></canvas>
+    </div>
+    <script>
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } },
+                    video: { facingMode: { ideal: \"environment\" } },
                     audio: false
                 });
                 document.getElementById('video').srcObject = stream;
             } catch (err) {
-                alert("Gagal mengakses kamera: " + err.message);
+                alert(\"Gagal mengakses kamera: \" + err.message);
             }
         }
-
         function takePhoto() {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
+            const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
             const dataURL = canvas.toDataURL('image/png');
             const input = window.parent.document.querySelector('input[data-testid="stTextInput"]');
-            input.value = dataURL;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
+            if (input) {
+                input.value = dataURL;
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
         }
-
         document.addEventListener("DOMContentLoaded", startCamera);
-        </script>
-        """, height=600
-    )
+    </script>
+    """
+    st.components.v1.html(camera_html, height=600)
+    base64_img = st.text_input("Gambar dari Kamera", type="default", label_visibility="collapsed")
 
-    base64_img = st.text_input("Gambar dari Kamera", label_visibility="collapsed")
     if base64_img.startswith("data:image"):
+        st.session_state["camera_image"] = base64_img
         try:
             header, encoded = base64_img.split(",", 1)
             decoded = base64.b64decode(encoded)
             image = Image.open(BytesIO(decoded))
-            st.image(image, caption="📸 Gambar dari Kamera", use_column_width=True)
+            st.image(image, caption="📷 Gambar dari Kamera", use_container_width=True)
         except Exception as e:
-            st.error(f"❌ Gagal memproses gambar: {e}")
+            st.error(f"Gagal memproses gambar: {e}")
 
-# ------------------------#
-# Proses Deteksi
-# ------------------------#
+# Proses deteksi
 if image:
-    with st.spinner("🚀 Memproses gambar..."):
-        results = predict_image(image)
+    with st.spinner("🔍 Memproses gambar..."):
+        model = load_model()
+        results = predict_image(model, image)
         img_out, class_counts = draw_results(image, results)
+        st.image(img_out, caption="📊 Hasil Deteksi", use_container_width=True)
 
-        st.image(img_out, caption="✅ Hasil Deteksi", use_column_width=True)
-        st.markdown("### 📊 Ringkasan Deteksi:")
-        for name, count in class_counts.items():
-            st.markdown(f"- **{name}**: {count}")
+        st.subheader("Jumlah Objek Terdeteksi:")
+        cols = st.columns(len(class_counts))
+        for i, (label, count) in enumerate(class_counts.items()):
+            with cols[i]:
+                st.metric(label=label, value=count)
+
+        if st.button("💾 Simpan Hasil Deteksi"):
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            output_path = f"hasil_deteksi_{timestamp}.png"
+            Image.fromarray(img_out).save(output_path)
+            st.success(f"Hasil disimpan sebagai {output_path}")
+
+st.markdown("---")
+st.markdown("🧪 *Dikembangkan oleh Tim Riset Kelapa Sawit - PT Saraswanti Anugerah Makmur*")
