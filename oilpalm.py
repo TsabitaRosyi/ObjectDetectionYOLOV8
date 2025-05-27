@@ -1,31 +1,30 @@
 import streamlit as st
+from PIL import Image
 import cv2
 import numpy as np
-from PIL import Image
 from collections import Counter
-import base64
-from io import BytesIO
 from ultralytics import YOLO
 from supervision import BoxAnnotator, LabelAnnotator, Color, Detections
-from datetime import datetime
+from io import BytesIO
+import base64
+
+# Konversi gambar ke base64 untuk dimasukkan ke dalam HTML
+def image_to_base64(image: Image.Image):
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
 
 # Konfigurasi halaman
 st.set_page_config(page_title="Deteksi Buah Sawit", layout="wide")
 
-# Gambar header
-st.image("Buah-Kelapa-Sawit.jpg", caption="Deteksi Buah Sawit - by Team", use_container_width=True)
-
-# Sidebar pengaturan
-with st.sidebar:
-    st.title("⚙️ Pengaturan")
-    input_method = st.radio("Metode Input Gambar", ["📁 Upload", "📷 Kamera"])
-
 # Load model YOLO
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")  # Ganti path jika model ada di lokasi berbeda
+    return YOLO("best.pt")  # Ganti dengan path model kamu
 
-# Warna untuk setiap label
+model = load_model()
+
+# Warna label
 label_to_color = {
     "Masak": Color.RED,
     "Mengkal": Color.YELLOW,
@@ -33,13 +32,7 @@ label_to_color = {
 }
 label_annotator = LabelAnnotator()
 
-# Prediksi dengan YOLO
-def predict_image(model, image):
-    image = np.array(image.convert("RGB"))
-    results = model(image)
-    return results
-
-# Gambar hasil prediksi
+# Fungsi anotasi
 def draw_results(image, results):
     img = np.array(image.convert("RGB"))
     class_counts = Counter()
@@ -56,6 +49,7 @@ def draw_results(image, results):
             class_name = names[class_id]
             label = f"{class_name}: {conf:.2f}"
             color = label_to_color.get(class_name, Color.WHITE)
+
             class_counts[class_name] += 1
 
             box_annotator = BoxAnnotator(color=color)
@@ -68,101 +62,119 @@ def draw_results(image, results):
             img = box_annotator.annotate(scene=img, detections=detection)
             img = label_annotator.annotate(scene=img, detections=detection, labels=[label])
 
-    return img, class_counts
+    return Image.fromarray(img), class_counts
 
-# Inisialisasi kamera
-if "camera_image" not in st.session_state:
-    st.session_state["camera_image"] = ""
+# Sidebar
+with st.sidebar:
+    st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
+    st.image("logo-saraswanti.png", width=150)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# Judul
-st.title("🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit")
+    st.markdown(
+        """
+        <h4 style='margin-bottom: 5px;'>Pilih metode input gambar:</h4>
+        """, 
+        unsafe_allow_html=True
+    )
 
-image = None
+    option = st.radio("", ["Upload Gambar", "Gunakan Kamera"], label_visibility="collapsed")
 
-# Upload
-if input_method == "📁 Upload":
-    uploaded_file = st.file_uploader("Unggah gambar", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="🖼 Gambar yang Diunggah", use_container_width=True)
+    image = None
 
-# Kamera
-elif input_method == "📷 Kamera":
-    st.markdown("### Kamera Belakang (Environment)")
+    if option == "Upload Gambar":
+        st.markdown("<p style='font-size:16px; font-weight:bold; margin-bottom: 5px;'>Unggah gambar</p>", unsafe_allow_html=True)
+        uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
+        if uploaded_file:
+            image = Image.open(uploaded_file)
 
-    camera_html = """
-    <div style="text-align:center;">
-        <video id="video" autoplay playsinline style="width:100%; border:1px solid gray;"></video>
-        <br/>
-        <button onclick="takePhoto()" style="margin-top:10px; padding:10px 20px;">📸 Ambil Gambar</button>
-        <canvas id="canvas" style="display:none;"></canvas>
-    </div>
-    <script>
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } },
-                    audio: false
-                });
-                document.getElementById('video').srcObject = stream;
-            } catch (err) {
-                alert("Gagal mengakses kamera: " + err.message);
-            }
-        }
-        function takePhoto() {
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataURL = canvas.toDataURL('image/png');
-            const input = window.parent.document.querySelector('input[data-testid="stTextInput"]');
-            if (input) {
-                input.value = dataURL;
-                input.dispatchEvent(new Event("input", { bubbles: true }));
-            }
-        }
-        document.addEventListener("DOMContentLoaded", startCamera);
-    </script>
-    """
-    st.components.v1.html(camera_html, height=600)
-    base64_img = st.text_input("Gambar dari Kamera", type="default", label_visibility="collapsed")
+    elif option == "Gunakan Kamera":
+        st.markdown("<p style='font-size:16px; font-weight:bold; margin-bottom: 5px;'>Ambil gambar dengan kamera</p>", unsafe_allow_html=True)
+        camera_photo = st.camera_input("")
+        if camera_photo is not None:
+            image = Image.open(camera_photo)
 
-    if base64_img.startswith("data:image"):
-        st.session_state["camera_image"] = base64_img
-        try:
-            header, encoded = base64_img.split(",", 1)
-            decoded = base64.b64decode(encoded)
-            image = Image.open(BytesIO(decoded))
-            st.image(image, caption="📷 Gambar dari Kamera", use_container_width=True)
-        except Exception as e:
-            st.error(f"Gagal memproses gambar: {e}")
+    # Created by section
+    profile_img = Image.open("foto1.jpg")
+    st.markdown(
+        f"""
+        <style>
+            .created-by-container {{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 15px;
+                margin-bottom: 30px;
+            }}
+            .created-by-img {{
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                border: 2px solid #444;
+                object-fit: cover;
+            }}
+            .created-by-text {{
+                font-size: 14px;
+                color: #555;
+                font-style: italic;
+                user-select: none;
+            }}
+        </style>
+        <div class="created-by-container">
+            <img class="created-by-img" src="data:image/png;base64,{image_to_base64(profile_img)}" alt="Profil" />
+            <div class="created-by-text">Created by : hawa tercipta di dunia</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# Deteksi dan tampilkan hasil
+# Judul dan deskripsi
+st.markdown("<h1 style='text-align:center;'>🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit</h1>", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="text-align:center; font-size:16px; max-width:800px; margin:auto;">
+    Sistem ini menggunakan teknologi YOLO untuk mendeteksi dan mengklasifikasikan kematangan buah kelapa sawit 
+    secara otomatis berdasarkan gambar input. Dengan deteksi yang akurat, diharapkan dapat membantu dalam 
+    pengelolaan perkebunan kelapa sawit yang lebih efisien dan hasil panen yang optimal.
+</div>
+""", unsafe_allow_html=True)
+
+# Tambahkan jarak sebelum hasil deteksi
+st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
+
+# Jika ada gambar input
 if image:
     with st.spinner("🔍 Memproses gambar..."):
-        model = load_model()
-        results = predict_image(model, image)
-        img_out, class_counts = draw_results(image, results)
-        st.image(img_out, caption="📊 Hasil Deteksi", use_container_width=True)
+        results = model(image)
+        result_img, class_counts = draw_results(image, results)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### 🖼️ Gambar Input")
+            st.image(image, use_container_width=True)
+
+        with col2:
+            st.markdown("### 📊 Hasil Deteksi")
+            st.image(result_img, use_container_width=True)
 
         st.subheader("Jumlah Objek Terdeteksi:")
-        cols = st.columns(len(class_counts))
-        for i, (label, count) in enumerate(class_counts.items()):
-            with cols[i]:
-                st.metric(label=label, value=count)
+        for name, count in class_counts.items():
+            st.write(f"- **{name}**: {count}")
 
-        # Tombol unduh hasil
-        if st.button("💾 Unduh Hasil Deteksi"):
-            img_pil = Image.fromarray(img_out)
-            buf = BytesIO()
-            img_pil.save(buf, format="PNG")
-            byte_im = buf.getvalue()
+        # Tombol download hasil
+        buffered = BytesIO()
+        result_img.save(buffered, format="PNG")
+        img_bytes = buffered.getvalue()
 
-            st.download_button(
-                label="⬇️ Klik untuk Mengunduh Gambar",
-                data=byte_im,
-                file_name=f"hasil_deteksi_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png",
-                mime="image/png"
-            )
+        st.download_button(
+            label="⬇️ Download Gambar Hasil Deteksi",
+            data=img_bytes,
+            file_name="hasil_deteksi.png",
+            mime="image/png"
+        )
+
+# Jika belum ada gambar input, beri jarak dan tampilkan info
+else:
+    st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
+    st.info("Silakan unggah gambar atau ambil foto dengan kamera untuk memulai deteksi.")
