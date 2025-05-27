@@ -154,6 +154,31 @@ if image:
             st.markdown("### 🖼️ Gambar Input")
             st.image(image, use_container_width=True)
 
+            # Efek animasi "sedang membaca"
+            st.markdown("""
+            <div style="margin-top: 10px; text-align: center;">
+                <span style="font-size: 16px; color: #666;">🔍 Membaca dan Menganalisis Gambar...</span>
+                <div class="loader"></div>
+            </div>
+
+            <style>
+            .loader {
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                animation: spin 1s linear infinite;
+                margin: 10px auto;
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
         with col2:
             st.markdown("### 📊 Hasil Deteksi")
             st.image(result_img, use_container_width=True)
@@ -174,7 +199,7 @@ if image:
             mime="image/png"
         )
 
-# Jika belum ada gambar input, beri jarak dan tampilkan info
+# Jika belum ada gambar input
 else:
     st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
     st.info("Silakan unggah gambar atau ambil foto dengan kamera untuk memulai deteksi.")
