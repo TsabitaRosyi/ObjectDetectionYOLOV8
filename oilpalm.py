@@ -3,19 +3,13 @@ from PIL import Image
 import cv2
 import numpy as np
 from collections import Counter
-from ultralytics import RTDETR
+from ultralytics import YOLO
 from supervision import BoxAnnotator, LabelAnnotator, Color, Detections
 from io import BytesIO
 import base64
 import tempfile
-
-# Optional import untuk kamera live (biar tidak error di Streamlit Cloud kalau tidak ada streamlit-webrtc)
-try:
-    from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-    import av
-    webrtc_available = True
-except ModuleNotFoundError:
-    webrtc_available = False
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import av
 
 # -----------------------------
 # Konversi gambar ke base64
@@ -28,15 +22,14 @@ def image_to_base64(image: Image.Image):
 # -----------------------------
 # Konfigurasi halaman
 # -----------------------------
-st.set_page_config(page_title="Deteksi Buah Sawit - RT-DETR", layout="wide")
+st.set_page_config(page_title="Deteksi Buah Sawit", layout="wide")
 
 # -----------------------------
-# Load model RT-DETR
+# Load model YOLO
 # -----------------------------
 @st.cache_resource
 def load_model():
-    # Ganti "best.pt" dengan model RT-DETR kamu, misalnya "rtdetr-l.pt"
-    return RTDETR("best_rtdetr.pt")
+    return YOLO("best.pt")  # Ganti path model sesuai kebutuhan
 
 model = load_model()
 
@@ -93,10 +86,7 @@ with st.sidebar:
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<h4 style='margin-bottom: 5px;'>Pilih metode input:</h4>", unsafe_allow_html=True)
-    options = ["Upload Gambar", "Gunakan Kamera (Foto)", "Upload Video"]
-    if webrtc_available:
-        options.append("Kamera Live")
-    option = st.radio("", options, label_visibility="collapsed")
+    option = st.radio("", ["Upload Gambar", "Gunakan Kamera (Foto)", "Upload Video", "Kamera Live"], label_visibility="collapsed")
 
     # Created by section
     profile_img = Image.open("foto1.jpg")
@@ -136,11 +126,11 @@ with st.sidebar:
 # -----------------------------
 # Judul & Deskripsi
 # -----------------------------
-st.markdown("<h1 style='text-align:center;'>🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit (RT-DETR)</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>🌴 Deteksi dan Klasifikasi Kematangan Buah Sawit</h1>", unsafe_allow_html=True)
 st.markdown("""
 <div style="text-align:center; font-size:16px; max-width:800px; margin:auto;">
-    Sistem ini menggunakan teknologi RT-DETR untuk mendeteksi dan mengklasifikasikan kematangan buah kelapa sawit 
-    secara otomatis berdasarkan gambar atau video input.
+    Sistem ini menggunakan teknologi YOLO untuk mendeteksi dan mengklasifikasikan kematangan buah kelapa sawit 
+    secara otomatis berdasarkan gambar atau video input. 
 </div>
 """, unsafe_allow_html=True)
 
@@ -218,10 +208,10 @@ elif option == "Upload Video":
             st.download_button("⬇️ Download Video Hasil Deteksi", f, file_name="hasil_deteksi.mp4")
 
 # -----------------------------
-# Mode Kamera Live (jika tersedia)
+# Mode Kamera Live
 # -----------------------------
-elif option == "Kamera Live" and webrtc_available:
-    class RTDETRVideoTransformer(VideoTransformerBase):
+elif option == "Kamera Live":
+    class YOLOVideoTransformer(VideoTransformerBase):
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
             results = model(img)
@@ -229,7 +219,7 @@ elif option == "Kamera Live" and webrtc_available:
             return cv2.cvtColor(np.array(annotated_frame), cv2.COLOR_RGB2BGR)
 
     webrtc_streamer(
-        key="rtdetr-live",
-        video_transformer_factory=RTDETRVideoTransformer,
+        key="yolo-live",
+        video_transformer_factory=YOLOVideoTransformer,
         media_stream_constraints={"video": True, "audio": False}
     )
