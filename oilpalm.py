@@ -46,7 +46,7 @@ label_annotator = LabelAnnotator()
 # -----------------------------
 # Fungsi anotasi deteksi
 # -----------------------------
-def draw_results(image, results):
+def draw_results(image, results, return_type="pil"):
     img = np.array(image.convert("RGB"))
     class_counts = Counter()
 
@@ -75,7 +75,10 @@ def draw_results(image, results):
             img = box_annotator.annotate(scene=img, detections=detection)
             img = label_annotator.annotate(scene=img, detections=detection, labels=[label])
 
-    return Image.fromarray(img), class_counts
+    if return_type == "pil":
+        return Image.fromarray(img), class_counts
+    else:  # untuk streamlit-webrtc (butuh array OpenCV)
+        return img, class_counts
 
 # -----------------------------
 # Sidebar
@@ -143,7 +146,7 @@ if option == "Upload Gambar":
         image = Image.open(uploaded_file)
         with st.spinner("🔍 Memproses gambar..."):
             results = model(image)
-            result_img, class_counts = draw_results(image, results)
+            result_img, class_counts = draw_results(image, results, return_type="pil")
 
         col1, col2 = st.columns(2)
         col1.image(image, caption="Gambar Input", use_container_width=True)
@@ -166,7 +169,7 @@ elif option == "Gunakan Kamera (Foto)":
         image = Image.open(camera_photo)
         with st.spinner("🔍 Memproses gambar..."):
             results = model(image)
-            result_img, class_counts = draw_results(image, results)
+            result_img, class_counts = draw_results(image, results, return_type="pil")
 
         col1, col2 = st.columns(2)
         col1.image(image, caption="Gambar Input", use_container_width=True)
@@ -196,10 +199,9 @@ elif option == "Upload Video":
                 if not ret:
                     break
                 results = model(frame)
-                annotated_frame, _ = draw_results(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)), results)
-                frame_bgr = cv2.cvtColor(np.array(annotated_frame), cv2.COLOR_RGB2BGR)
-                out.write(frame_bgr)
-                stframe.image(frame_bgr, channels="BGR", use_container_width=True)
+                annotated_frame, _ = draw_results(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)), results, return_type="cv2")
+                out.write(annotated_frame)
+                stframe.image(annotated_frame, channels="BGR", use_container_width=True)
 
         cap.release()
         out.release()
@@ -208,15 +210,15 @@ elif option == "Upload Video":
             st.download_button("⬇️ Download Video Hasil Deteksi", f, file_name="hasil_deteksi.mp4")
 
 # -----------------------------
-# Mode Kamera Live
+# Mode Kamera Live (streamlit-webrtc)
 # -----------------------------
 elif option == "Kamera Live":
     class YOLOVideoTransformer(VideoTransformerBase):
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
             results = model(img)
-            annotated_frame, _ = draw_results(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), results)
-            return cv2.cvtColor(np.array(annotated_frame), cv2.COLOR_RGB2BGR)
+            annotated_frame, _ = draw_results(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), results, return_type="cv2")
+            return annotated_frame
 
     webrtc_streamer(
         key="yolo-live",
