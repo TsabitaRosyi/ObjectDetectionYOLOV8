@@ -60,7 +60,7 @@ def draw_results(image, results, return_type="pil"):
 
         for box, class_id, conf in zip(xyxy, class_ids, confidences):
             class_name = names[class_id]
-            label = f"{class_name}: {conf:.2f}"
+            label = f"{class_name}"
             color = label_to_color.get(class_name, Color.WHITE)
 
             class_counts[class_name] += 1
