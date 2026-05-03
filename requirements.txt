@@ -1,10 +1,8 @@
 streamlit
 ultralytics
-supervision==0.18.0
+supervision
 opencv-python-headless
 numpy
-Pillow
-torch
-torchvision
-streamlit-webrtc
+pillow
+pi-heif
 plotly
